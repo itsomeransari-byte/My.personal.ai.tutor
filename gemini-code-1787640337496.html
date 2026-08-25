@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Personal AI Tutor (100% Free)</title>
+<style>
+:root{--bg:#070b14;--panel:#101827;--panel2:#182236;--text:#f6f8ff;--muted:#aab4c7;--accent:#6d5dfc;--accent2:#25c7ff;--danger:#ff667a;--border:rgba(255,255,255,.09)}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#18213d 0,#070b14 42%);color:var(--text);font-family:Arial,system-ui,sans-serif}
+.app{display:flex;min-height:100vh}.side{width:280px;background:rgba(8,12,22,.86);border-right:1px solid var(--border);padding:16px;position:fixed;inset:0 auto 0 0;overflow:auto;z-index:5}
+.brand{font-size:22px;font-weight:900;padding:8px 6px 18px}.brand span{color:var(--accent2)}
+button,.btn{border:0;border-radius:13px;padding:11px 14px;color:white;background:#27324a;cursor:pointer;font:inherit}.btn:hover,button:hover{filter:brightness(1.12)}
+.new{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));font-weight:800}
+.label{font-size:11px;color:var(--muted);letter-spacing:1px;margin:20px 6px 7px}
+.subject{display:block;width:100%;text-align:left;background:transparent;padding:10px 11px;margin:2px 0}.subject.active,.subject:hover{background:var(--panel2)}
+.main{margin-left:280px;width:calc(100% - 280px);min-height:100vh;display:flex;flex-direction:column}
+.head{height:64px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;background:rgba(7,11,20,.85);backdrop-filter:blur(12px);z-index:3}
+.status{font-size:12px;color:#9fe5ff}.chat{width:min(980px,100%);margin:0 auto;flex:1;padding:24px 16px 110px}
+.welcome{text-align:center;padding:70px 10px}.welcome h1{font-size:clamp(30px,6vw,54px);margin:0 0 10px}.welcome p{color:var(--muted)}
+.quick{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:24px}.quick button{background:var(--panel);border:1px solid var(--border)}
+.msg{display:flex;gap:10px;margin:16px 0;align-items:flex-start}.msg.user{justify-content:flex-end}.avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent);flex:none}.user .avatar{background:var(--accent2)}
+.bubble{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:14px;max-width:min(82%,720px);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.user .bubble{background:#1d3155}
+.composer{position:fixed;bottom:0;left:280px;right:0;background:linear-gradient(transparent,#070b14 18%,#070b14);padding:22px 14px 14px;z-index:4}.row{width:min(980px,100%);margin:auto;display:flex;gap:8px;align-items:end;background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:8px}
+textarea{flex:1;min-height:50px;max-height:180px;resize:none;border:0;outline:0;background:transparent;color:white;padding:12px;font:inherit}.icon{width:45px;height:45px;padding:0;display:grid;place-items:center}.send{background:var(--accent);width:50px;height:50px;padding:0;font-size:18px}.small{font-size:12px;color:var(--muted);text-align:center;margin-top:7px}
+.menu{display:none}
+@media(max-width:800px){.side{transform:translateX(-100%);transition:.25s}.side.show{transform:translateX(0)}.main{margin-left:0;width:100%}.composer{left:0}.menu{display:grid}.bubble{max-width:88%}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side" id="side">
+  <div class="brand">My<span>AI</span> Tutor 🧠</div>
+  <button class="new" onclick="newChat()">＋ New Chat</button>
+  <div class="label">SUBJECTS</div>
+  <div id="subjects"></div>
+</aside>
+
+<main class="main">
+<header class="head">
+  <button class="icon menu" onclick="toggleMenu()">☰</button>
+  <b id="subjectName">General Study</b>
+  <span class="status" id="status">● Ready</span>
+</header>
+
+<section class="chat" id="chat">
+  <div class="welcome">
+    <h1>Assalam-o-Alaikum 👋</h1>
+    <p>Ask me about any subject. You can type or speak your question.</p>
+    <div class="quick">
+      <button onclick="ask('Teach me Japanese from zero')">🇯🇵 Japanese</button>
+      <button onclick="ask('Explain Newton laws simply')">🔬 Physics</button>
+      <button onclick="ask('Give me a math practice question')">➗ Math</button>
+      <button onclick="ask('Make a quiz for me')">❓ Quiz</button>
+    </div>
+  </div>
+</section>
+
+<footer class="composer">
+  <div class="row">
+    <button class="icon" onclick="voiceInput()" title="Speak">🎤</button>
+    <textarea id="input" placeholder="Ask your question..." onkeydown="keySend(event)"></textarea>
+    <button class="icon" id="voiceBtn" onclick="toggleVoice()" title="AI voice">🔊</button>
+    <button class="send" onclick="send()">➤</button>
+  </div>
+  <div class="small">Enter = send • Shift+Enter = new line</div>
+</footer>
+</main>
+</div>
+
+<script>
+// Embedded Groq API Key
+const GROQ_API_KEY = "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";
+
+const subjects=["General Study","Mathematics","Physics","Chemistry","Biology","English","Urdu","Japanese","Computer Science","Pakistan Studies","Islamiat","Geography","Astronomy","History","Logical Reasoning"];
+let subject="General Study", history=[], voiceOn=true;
+
+const subjectBox=document.getElementById("subjects");
+subjects.forEach(s=>{
+  const b=document.createElement("button");
+  b.className="subject"+(s===subject?" active":"");
+  b.textContent=({"Mathematics":"➗ ","Physics":"🔬 ","Chemistry":"🧪 ","Biology":"🧬 ","English":"🇬🇧 ","Urdu":"🇵🇰 ","Japanese":"🇯🇵 ","Computer Science":"💻 ","Astronomy":"🌌 "}[s]||"📚 ")+s;
+  b.onclick=()=>selectSubject(s);
+  subjectBox.appendChild(b);
+});
+
+function selectSubject(s){
+  subject=s;
+  document.getElementById("subjectName").textContent=s;
+  [...document.querySelectorAll(".subject")].forEach(b=>b.classList.toggle("active",b.textContent.includes(s)));
+  if(innerWidth<801)toggleMenu();
+}
+function toggleMenu(){document.getElementById("side").classList.toggle("show")}
+function setStatus(t){document.getElementById("status").textContent=t}
+function ask(t){document.getElementById("input").value=t;send()}
+function keySend(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}
+function newChat(){history=[];document.getElementById("chat").innerHTML='<div class="welcome"><h1>New Study Session 📚</h1><p>What do you want to learn today?</p></div>'}
+
+function addMessage(text,who="ai"){
+  const m=document.createElement("div");
+  m.className="msg "+(who==="user"?"user":"");
+  const a=document.createElement("div");
+  a.className="avatar";
+  a.textContent=who==="user"?"👤":"🧠";
+  const b=document.createElement("div");
+  b.className="bubble";
+  b.textContent=text;
+  if(who==="user"){m.append(b,a)}else m.append(a,b);
+  document.getElementById("chat").appendChild(m);
+  m.scrollIntoView({behavior:"smooth",block:"end"});
+  return m;
+}
+
+function voiceInput(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){alert("Voice recognition Chrome browser par best chalti hai."); return;}
+  const r = new SR();
+  r.lang = "ur-PK";
+  setStatus("🎤 Listening...");
+  r.onresult = (e) => { document.getElementById("input").value = e.results[0][0].transcript; setStatus("● Ready"); };
+  r.onerror = () => { setStatus("● Voice Error"); };
+  try { r.start(); } catch(err) { alert("Mic Error: " + err.message); }
+}
+
+function toggleVoice(){voiceOn=!voiceOn;document.getElementById("voiceBtn").textContent=voiceOn?"🔊":"🔇"}
+
+// 🔊 Clean Voice Function (removes markdown symbols before reading)
+function speak(t){
+  if(!voiceOn || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+
+  // Strip markdown tables, dashes, pipes, and special symbols
+  let cleanText = t
+    .replace(/\|/g, " ")
+    .replace(/[-_]{2,}/g, " ")
+    .replace(/[`*#~>]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const u = new SpeechSynthesisUtterance(cleanText);
+  u.rate = 1;
+  speechSynthesis.speak(u);
+}
+
+async function send(){
+  const text=document.getElementById("input").value.trim();
+  if(!text) return;
+
+  addMessage(text, "user");
+  document.getElementById("input").value="";
+  const loading=addMessage("Thinking... ⏳");
+  setStatus("● AI Generating...");
+  
+  // Prompt instructed to avoid raw markdown tables
+  const systemPrompt = `You are a friendly personal AI tutor. Current subject: ${subject}. Teach clearly for a school student. Answer in Urdu, Roman Urdu, or English based on user's query. Keep explanations simple, conversational, and step-by-step. Do NOT use markdown tables or pipe symbols (|). Use bullet points instead.`;
+  
+  const apiMessages = [
+    { role: "system", content: systemPrompt },
+    ...history,
+    { role: "user", content: text }
+  ];
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-oss-20b",
+        messages: apiMessages,
+        max_tokens: 1000
+      })
+    });
+
+    const data = await res.json();
+    if(!res.ok) throw new Error(data?.error?.message || "Server Error");
+    
+    const reply = data?.choices?.[0]?.message?.content || "No response received.";
+    
+    loading.remove();
+    addMessage(reply);
+    
+    history.push({ role: "user", content: text });
+    history.push({ role: "assistant", content: reply });
+    if(history.length > 10) history = history.slice(-10);
+    
+    speak(reply);
+    setStatus("● Ready");
+
+  } catch(err) {
+    loading.remove();
+    addMessage("⚠️ Error: " + err.message);
+    setStatus("● Connection Error");
+  }
+}
+</script>
+</body>
+</html>
