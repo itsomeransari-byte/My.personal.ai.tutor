@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>NEXUS OS — Infinite Web Kernel v2.0</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@400;500;600;700&family=Fira+Code:wght@400;500;700&display=swap');
+
+    :root {
+      --neon-cyan: #00f3ff;
+      --neon-blue: #0066ff;
+      --neon-gold: #ffaa00;
+      --bg-void: #020208;
+      --glass-bg: rgba(10, 15, 30, 0.85);
+      --glass-border: rgba(56, 189, 248, 0.25);
+    }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-void);
+      font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #f1f5f9;
+    }
+
+    .font-orbitron { font-family: 'Orbitron', sans-serif; }
+    .font-mono { font-family: 'Fira Code', monospace; }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+    }
+
+    .glass-button {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      transition: all 0.2s ease-in-out;
+    }
+    .glass-button:hover, .glass-button:active {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: rgba(56, 189, 248, 0.6);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    .glass-app {
+      background: rgba(10, 15, 30, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.5); border-radius: 4px; }
+
+    .drawer-left { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .drawer-closed-left { transform: translateX(-110%); }
+    .drawer-right { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+    .drawer-closed-right { transform: translateX(110%); }
+
+    .scanline {
+      position: absolute;
+      left: 0; right: 0; top: 0; height: 2px;
+      background: var(--neon-cyan);
+      box-shadow: 0 0 12px var(--neon-cyan);
+      opacity: 0.25;
+      animation: scan 4s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+    .phone-border {
+      box-shadow: 0 0 50px rgba(0, 243, 255, 0.25), inset 0 0 15px rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body class="select-none overflow-hidden">
+
+  <!-- 3D Planetary Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- MAIN HUD OVERLAY -->
+  <div id="hud-layer" class="relative z-10 w-full h-full pointer-events-none flex flex-col justify-between p-2 sm:p-4">
+
+    <!-- TOP BAR HEADER -->
+    <header class="w-full flex justify-between items-center pointer-events-auto gap-2">
+      <div class="glass-panel rounded-xl px-3 py-2 flex items-center space-x-3">
+        <div class="relative flex items-center justify-center">
+          <i class="fa-solid fa-atom text-cyan-400 text-lg"></i>
+          <span class="absolute -top-1 -right-1 flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+          </span>
+        </div>
+        <div>
+          <h1 class="font-black text-xs sm:text-sm tracking-widest font-orbitron bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+            NEXUS OS v2.0
+          </h1>
+          <p class="text-[9px] text-sky-300/80 font-mono tracking-tight flex items-center gap-1">
+            <span>KARACHI KERNEL ONLINE</span>
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Telemetry Matrix -->
+      <div class="hidden md:flex glass-panel rounded-xl px-3 py-1.5 text-xs font-mono text-cyan-300 space-x-3 items-center">
+        <div><span class="text-slate-400 text-[10px] block">SYS TIME</span><span id="sys-clock">00:00:00</span></div>
+        <div class="border-l border-slate-700 pl-3"><span class="text-slate-400 text-[10px] block">TIME SCALE</span><span id="time-scale-val">1.0x</span></div>
+        <div class="border-l border-slate-700 pl-3"><span class="text-slate-400 text-[10px] block">STATUS</span><span id="sim-status" class="text-emerald-400 font-bold">ACTIVE</span></div>
+      </div>
+
+      <!-- Header Action Quick Keys -->
+      <div class="flex items-center space-x-1.5">
+        <button onclick="toggleMobilePhone()" class="glass-button rounded-xl px-3 py-2 text-xs font-semibold flex items-center space-x-1.5 text-cyan-300 border-cyan-500/40">
+          <i class="fa-solid fa-mobile-screen-button text-sm text-cyan-400"></i>
+          <span class="hidden sm:inline">Mobile Shell</span>
+        </button>
+
+        <button onclick="toggleDrawer('nasa-drawer')" class="glass-button rounded-xl px-3 py-2 text-xs font-semibold flex items-center space-x-1.5 text-amber-300 border-amber-500/40">
+          <i class="fa-solid fa-meteor text-sm text-amber-400"></i>
+          <span class="hidden sm:inline">NASA Telemetry</span>
+        </button>
+
+        <button id="audio-btn" onclick="toggleAudio()" class="glass-button rounded-xl p-2 sm:px-3 text-xs font-semibold text-slate-300 hover:text-cyan-300">
+          <i id="audio-icon" class="fa-solid fa-volume-xmark"></i>
+        </button>
+
+        <button onclick="toggleDrawer('left-drawer')" class="glass-button rounded-xl p-2 text-xs text-sky-400 sm:hidden">
+          <i class="fa-solid fa-compass"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- LEFT DRAWER: CELESTIAL NAVIGATOR -->
+    <aside id="left-drawer" class="drawer-left drawer-closed-left sm:transform-none fixed sm:absolute left-2 sm:left-4 top-16 bottom-16 w-72 glass-panel rounded-2xl p-3.5 pointer-events-auto flex flex-col justify-between z-30 sm:z-10 shadow-2xl">
+      <div class="scanline"></div>
+      <div>
+        <div class="flex items-center justify-between border-b border-sky-500/20 pb-2 mb-2">
+          <span class="text-xs font-bold font-orbitron tracking-widest text-sky-400 uppercase flex items-center gap-2">
+            <i class="fa-solid fa-compass"></i> Celestial Nav
+          </span>
+          <button onclick="toggleDrawer('left-drawer')" class="text-slate-400 hover:text-white sm:hidden p-1">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <div class="relative mb-2">
+          <input type="text" id="search-input" onkeyup="handleSearch(this.value)" placeholder="Search planets, craft..." class="w-full bg-slate-900/80 border border-sky-500/30 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono" />
+          <i class="fa-solid fa-magnifying-glass absolute right-2.5 top-2 text-xs text-slate-500"></i>
+        </div>
+
+        <div class="overflow-y-auto custom-scroll max-h-[45vh] pr-1 space-y-1" id="celestial-list"></div>
+      </div>
+
+      <div class="border-t border-sky-500/20 pt-2.5">
+        <div class="text-[10px] font-bold text-sky-300 uppercase tracking-wider mb-1.5 flex justify-between font-mono">
+          <span>Simulation Speed Matrix</span>
+          <span id="speed-val" class="text-cyan-400">1.0x</span>
+        </div>
+        <div class="grid grid-cols-4 gap-1 mb-2 text-[10px] font-mono">
+          <button onclick="setTimeScale(0)" class="glass-button py-1 rounded-lg text-amber-300">PAUSE</button>
+          <button onclick="setTimeScale(0.5)" class="glass-button py-1 rounded-lg text-sky-300">0.5x</button>
+          <button onclick="setTimeScale(1.0)" class="glass-button py-1 rounded-lg text-emerald-300">1.0x</button>
+          <button onclick="setTimeScale(5.0)" class="glass-button py-1 rounded-lg text-purple-300">5.0x</button>
+        </div>
+        <input type="range" id="speed-slider" min="0" max="10" step="0.1" value="1" oninput="setTimeScale(this.value)" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400" />
+      </div>
+    </aside>
+
+    <!-- RIGHT DRAWER: NASA TELEMETRY -->
+    <aside id="nasa-drawer" class="drawer-right drawer-closed-right fixed right-2 sm:right-4 top-16 bottom-16 w-80 sm:w-88 glass-panel rounded-2xl p-3.5 pointer-events-auto flex flex-col z-40 shadow-2xl">
+      <div class="scanline"></div>
+      <div class="flex items-center justify-between border-b border-amber-500/20 pb-2">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-satellite text-amber-400 animate-pulse"></i>
+          <span class="text-xs font-bold font-orbitron tracking-widest text-amber-400 uppercase">NASA Live Telemetry</span>
+        </div>
+        <button onclick="toggleDrawer('nasa-drawer')" class="glass-button rounded-lg w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+      </div>
+
+      <div class="my-2 p-2 bg-slate-900/80 border border-amber-500/30 rounded-xl text-[11px] flex items-center justify-between font-mono">
+        <span class="text-slate-300">NeoWS Data Feed:</span>
+        <span id="data-source-badge" class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">LIVE NASA DATA</span>
+      </div>
+
+      <div class="p-2 bg-amber-950/30 border border-amber-500/20 rounded-xl text-[11px] text-amber-200/90 flex items-center justify-between mb-2 font-mono">
+        <span>Tracked Asteroids:</span>
+        <span id="asteroid-count" class="font-bold text-amber-400">Loading...</span>
+      </div>
+
+      <div id="asteroid-list" class="overflow-y-auto custom-scroll flex-1 space-y-1.5 pr-1 font-mono"></div>
+      
+      <div id="apod-box" class="mt-2 p-2 bg-indigo-950/30 border border-indigo-500/30 rounded-xl text-[10px] text-indigo-200 hidden">
+        <div class="font-bold text-indigo-300 mb-0.5 font-orbitron" id="apod-title">NASA APOD</div>
+        <p class="text-slate-400 line-clamp-2" id="apod-desc">Loading description...</p>
+      </div>
+    </aside>
+
+    <!-- TELEMETRY OBJECT MODAL -->
+    <div id="telemetry-modal" class="hidden pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-md">
+      <div class="glass-panel w-full max-w-lg rounded-2xl p-4 sm:p-5 border border-cyan-500/40 relative shadow-2xl">
+        <button onclick="closeModal()" class="absolute top-3 right-3 glass-button rounded-xl w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+
+        <div class="flex items-center space-x-3 mb-3">
+          <div id="modal-icon-bg" class="w-10 h-10 rounded-xl flex items-center justify-center text-xl border border-cyan-400/30 bg-cyan-950/50">
+            <i id="modal-icon" class="fa-solid fa-globe text-cyan-400"></i>
+          </div>
+          <div>
+            <h2 id="modal-title" class="text-lg font-extrabold font-orbitron text-white tracking-wide">OBJECT NAME</h2>
+            <div id="modal-badge" class="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mt-0.5 font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+              TARGET LOCKED
+            </div>
+          </div>
+        </div>
+
+        <div id="modal-grid" class="grid grid-cols-2 gap-2 my-3 text-xs font-mono"></div>
+
+        <p id="modal-description" class="text-xs text-slate-300 leading-relaxed bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/50 mb-3 max-h-28 overflow-y-auto custom-scroll font-mono">
+          Details loading...
+        </p>
+
+        <div class="flex justify-end space-x-2 font-mono">
+          <button id="modal-follow-btn" onclick="followCurrentTarget()" class="glass-button px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 hover:text-white">
+            <i class="fa-solid fa-video mr-1"></i> Follow
+          </button>
+          <button onclick="closeModal()" class="glass-button px-4 py-1.5 rounded-xl text-xs font-bold text-cyan-300 hover:text-white">
+            <i class="fa-solid fa-check mr-1"></i> Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM FLOATING HUD BAR -->
+    <footer class="w-full flex justify-between items-end pointer-events-auto gap-2">
+      <div class="glass-panel rounded-xl px-3 py-1.5 text-[10px] text-slate-300 space-x-3 border border-slate-700/50 flex items-center font-mono">
+        <span><i class="fa-solid fa-microchip text-cyan-400 mr-1"></i> NEXUS KERNEL 2035</span>
+        <span class="hidden sm:inline text-slate-500">|</span>
+        <span class="hidden sm:inline"><i class="fa-solid fa-location-dot text-cyan-400 mr-1"></i> Karachi, PK</span>
+      </div>
+
+      <div class="flex items-center space-x-2 font-mono">
+        <button onclick="focusTarget('Earth')" class="glass-button rounded-xl px-3 py-2 text-xs font-bold text-sky-300 flex items-center space-x-1.5">
+          <i class="fa-solid fa-earth-americas"></i>
+          <span class="hidden sm:inline">Earth + Moon</span>
+        </button>
+
+        <button onclick="resetCamera()" class="glass-button rounded-xl px-3 py-2 text-xs font-bold text-cyan-300 flex items-center space-x-1.5">
+          <i class="fa-solid fa-arrows-to-eye"></i>
+          <span>Reset View</span>
+        </button>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- INTERACTIVE MOBILE PHONE OVERLAY FRAME -->
+  <div id="phoneShell" class="fixed inset-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 z-50 w-full h-full sm:w-[390px] sm:h-[812px] bg-black sm:rounded-[50px] border-0 sm:border-[10px] border-slate-800 phone-border overflow-hidden flex-col shadow-2xl transition-all duration-500 pointer-events-auto hidden">
+
+    <!-- CAMERA NOTCH / DYNAMIC ISLAND -->
+    <div class="absolute top-2 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-2 shadow-md border border-slate-800/80 pointer-events-auto">
+      <div class="w-3 h-3 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
+        <div class="w-1.5 h-1.5 rounded-full bg-blue-900/60"></div>
+      </div>
+      <div class="text-[9px] font-mono text-cyan-400 opacity-80 flex items-center space-x-1">
+        <i class="fa-solid fa-bolt text-yellow-400 text-[8px]"></i>
+        <span>NEXUS</span>
+      </div>
+    </div>
+
+    <!-- MOBILE STATUS BAR -->
+    <div class="w-full h-10 pt-2 px-6 flex justify-between items-center text-xs font-mono text-cyan-300 z-40 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+      <span id="statusBarClock" class="font-bold">12:00</span>
+      <div class="flex items-center space-x-2 text-[10px]">
+        <i class="fa-solid fa-signal"></i>
+        <i class="fa-solid fa-wifi"></i>
+        <i class="fa-solid fa-battery-three-quarters text-emerald-400"></i>
+      </div>
+    </div>
+
+    <!-- LOCK SCREEN -->
+    <div id="lockScreen" class="absolute inset-0 z-40 bg-gradient-to-b from-slate-950 via-cyan-950 to-black flex flex-col justify-between p-8 text-center transition-all duration-700 transform translate-y-0">
+      <div class="mt-12 space-y-2">
+        <div id="lockTime" class="text-6xl font-extrabold font-orbitron text-white tracking-tight">12:00</div>
+        <div id="lockDate" class="text-xs font-mono text-cyan-400 tracking-widest uppercase">Karachi, Pakistan</div>
+      </div>
+
+      <div class="space-y-6">
+        <div class="p-3 glass-panel rounded-2xl flex items-center space-x-3 text-left">
+          <div class="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400"><i class="fa-solid fa-shield-halved"></i></div>
+          <div class="text-[11px] font-mono">
+            <div class="text-white font-bold">NEXUS Core Active</div>
+            <div class="text-cyan-400/70">Tap unlock to enter mobile OS</div>
+          </div>
+        </div>
+
+        <button onclick="unlockPhone()" class="w-full py-3 rounded-2xl bg-cyan-500 text-black font-orbitron font-bold text-sm tracking-wider shadow-lg shadow-cyan-500/30 active:scale-95 transition transform">
+          UNLOCK SYSTEM
+        </button>
+      </div>
+    </div>
+
+    <!-- MOBILE HOMESCREEN -->
+    <div id="homeScreen" class="relative flex-1 p-5 pt-4 flex flex-col justify-between overflow-hidden bg-cover bg-center transition-all duration-500" style="background-image: radial-gradient(circle at center, #0f172a 0%, #020617 100%);">
+      <canvas id="phoneBgCanvas" class="absolute inset-0 pointer-events-none opacity-40"></canvas>
+
+      <!-- TOP MOBILE WIDGET -->
+      <div class="relative z-10 p-3 glass-panel rounded-3xl border border-cyan-500/30 shadow-lg">
+        <div class="flex justify-between items-start">
+          <div>
+            <div class="text-[10px] font-mono text-cyan-400 tracking-widest">NEXUS MOBILE OS</div>
+            <div class="text-lg font-orbitron font-bold text-white mt-0.5">KARACHI, PK</div>
+            <div class="text-xs text-cyan-300 font-mono">31°C — Quantum Core Linked</div>
+          </div>
+          <i class="fa-solid fa-microchip text-2xl text-cyan-400 animate-pulse"></i>
+        </div>
+      </div>
+
+      <!-- APPS GRID (Scrollable if needed) -->
+      <div class="relative z-10 grid grid-cols-4 gap-3 my-auto max-h-[440px] overflow-y-auto custom-scroll p-1">
+        <button onclick="launchExternalApp('https://youtube.com')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-red-600/30">
+            <i class="fa-brands fa-youtube"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">YouTube</span>
+        </button>
+
+        <button onclick="openApp('cityApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-red-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-amber-500/30">
+            <i class="fa-solid fa-car"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Neon Drive</span>
+        </button>
+
+        <!-- NEW GAME 1: CYBER SHOOTER -->
+        <button onclick="openApp('shooterApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-red-500 to-rose-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-red-500/30">
+            <i class="fa-solid fa-crosshairs"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Cyber Shooter</span>
+        </button>
+
+        <!-- NEW GAME 2: MEMORY MATRIX -->
+        <button onclick="openApp('matrixApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-800 flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/30">
+            <i class="fa-solid fa-cubes-stacked"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Grid Matrix</span>
+        </button>
+
+        <button onclick="openApp('birdsApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-sky-400 to-blue-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-sky-500/30">
+            <i class="fa-solid fa-crow"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Bird Sort</span>
+        </button>
+
+        <button onclick="openApp('labApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30">
+            <i class="fa-solid fa-flask"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Lab-X</span>
+        </button>
+
+        <button onclick="openApp('lifeApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30">
+            <i class="fa-solid fa-user-ninja"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Life Game</span>
+        </button>
+
+        <button onclick="openApp('musicApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-rose-500/30">
+            <i class="fa-solid fa-music"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Phonk Beats</span>
+        </button>
+
+        <!-- NEW APP 1: TERMINAL -->
+        <button onclick="openApp('terminalApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-slate-700 to-zinc-900 flex items-center justify-center text-emerald-400 text-2xl shadow-lg shadow-slate-700/30">
+            <i class="fa-solid fa-terminal"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Terminal</span>
+        </button>
+
+        <!-- NEW APP 2: HOLOGRAM -->
+        <button onclick="openApp('holoApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-cyan-400 to-blue-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-cyan-400/30">
+            <i class="fa-solid fa-vr-cardboard"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Hologram 3D</span>
+        </button>
+
+        <button onclick="openApp('calcApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-cyan-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30">
+            <i class="fa-solid fa-calculator"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Calculator</span>
+        </button>
+
+        <button onclick="openApp('notesApp')" class="flex flex-col items-center group active:scale-90 transition">
+          <div class="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-yellow-500 to-amber-700 flex items-center justify-center text-white text-2xl shadow-lg shadow-yellow-500/30">
+            <i class="fa-solid fa-note-sticky"></i>
+          </div>
+          <span class="mt-1 text-[10px] font-semibold text-slate-200">Notes</span>
+        </button>
+      </div>
+
+      <!-- MOBILE BOTTOM DOCK -->
+      <div class="relative z-10 p-3 glass-panel rounded-3xl flex justify-around items-center border border-cyan-500/30">
+        <button onclick="openApp('shooterApp')" class="text-red-400 text-xl"><i class="fa-solid fa-crosshairs"></i></button>
+        <button onclick="openApp('cityApp')" class="text-amber-400 text-xl"><i class="fa-solid fa-car"></i></button>
+        <button onclick="openApp('musicApp')" class="text-rose-400 text-xl"><i class="fa-solid fa-music"></i></button>
+        <button onclick="openApp('terminalApp')" class="text-emerald-400 text-xl"><i class="fa-solid fa-terminal"></i></button>
+        <button onclick="toggleMobilePhone()" class="text-slate-400 text-xl" title="Exit Mobile View"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <!-- MOBILE VIEWPORT APPLICATION CONTAINERS -->
+    <div id="appViewport" class="absolute inset-0 z-30 pointer-events-none">
+
+      <!-- APP 1: NEON CITY DRIVE -->
+      <div id="cityApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-amber-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-amber-300 font-bold flex items-center gap-2"><i class="fa-solid fa-car"></i> NEON CITY RUNNER</span>
+          <button onclick="closeApp('cityApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 flex flex-col relative overflow-hidden">
+          <div class="p-2 bg-slate-900/90 border-b border-amber-500/20 flex justify-between items-center text-xs font-mono">
+            <div class="text-amber-400 font-bold">SCORE: <span id="neonScore">0</span></div>
+            <div class="text-cyan-400 font-bold">SPEED: <span id="neonSpeed">1x</span></div>
+            <div class="text-rose-400 font-bold"><i class="fa-solid fa-heart mr-1"></i><span id="neonLives">3</span></div>
+          </div>
+          <div class="flex-1 relative">
+            <canvas id="neonCityGameCanvas" class="w-full h-full block bg-black"></canvas>
+            <div id="neonGameOver" class="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-3 hidden z-20">
+              <h2 class="text-2xl font-orbitron font-extrabold text-red-500 tracking-wider">CRASHED!</h2>
+              <p class="font-mono text-slate-300 text-xs">Final Score: <span id="neonFinalScore" class="text-amber-400 font-bold">0</span></p>
+              <button onclick="restartNeonCityGame()" class="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-rose-600 text-white font-orbitron font-bold text-xs rounded-xl shadow-lg active:scale-95 transition">RESTART DRIVE</button>
+            </div>
+          </div>
+          <div class="p-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center gap-2">
+            <button id="btnLeft" class="flex-1 py-3 bg-slate-800 border border-amber-500/30 rounded-xl text-amber-300 active:bg-amber-500/30 font-bold text-lg"><i class="fa-solid fa-arrow-left"></i> LEFT</button>
+            <button id="btnRight" class="flex-1 py-3 bg-slate-800 border border-amber-500/30 rounded-xl text-amber-300 active:bg-amber-500/30 font-bold text-lg">RIGHT <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: NEW GAME 1 - CYBER SPACE SHOOTER -->
+      <div id="shooterApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-red-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-red-400 font-bold flex items-center gap-2"><i class="fa-solid fa-crosshairs"></i> CYBER SPACE SHOOTER</span>
+          <button onclick="closeApp('shooterApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 flex flex-col relative overflow-hidden">
+          <div class="p-2 bg-slate-900/90 border-b border-red-500/20 flex justify-between items-center text-xs font-mono">
+            <div class="text-red-400 font-bold">KILLS: <span id="shooterScore">0</span></div>
+            <div class="text-cyan-400 font-bold">SHIELD: <span id="shooterShield">100%</span></div>
+          </div>
+          <div class="flex-1 relative">
+            <canvas id="shooterCanvas" class="w-full h-full block bg-black"></canvas>
+            <div id="shooterGameOver" class="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-3 hidden z-20">
+              <h2 class="text-2xl font-orbitron font-extrabold text-red-500 tracking-wider">DESTROYED!</h2>
+              <button onclick="initShooterGame()" class="px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white font-orbitron font-bold text-xs rounded-xl shadow-lg active:scale-95 transition">REBOOT SHIP</button>
+            </div>
+          </div>
+          <div class="p-3 bg-slate-900 border-t border-slate-800 flex justify-between items-center gap-2">
+            <button id="btnShooterLeft" class="flex-1 py-3 bg-slate-800 border border-red-500/30 rounded-xl text-red-300 font-bold"><i class="fa-solid fa-arrow-left"></i></button>
+            <button id="btnShooterFire" class="flex-2 px-6 py-3 bg-red-600 border border-red-400 rounded-xl text-white font-orbitron font-bold active:scale-95">FIRE ⚡</button>
+            <button id="btnShooterRight" class="flex-1 py-3 bg-slate-800 border border-red-500/30 rounded-xl text-red-300 font-bold"><i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: NEW GAME 2 - MEMORY GRID MATRIX -->
+      <div id="matrixApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-indigo-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-indigo-400 font-bold"><i class="fa-solid fa-cubes-stacked mr-2"></i> GRID MEMORY MATRIX</span>
+          <button onclick="closeApp('matrixApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 p-4 flex flex-col justify-between text-xs font-mono">
+          <div class="flex justify-between items-center bg-slate-900 p-2.5 rounded-xl border border-indigo-500/30">
+            <div>STAGE: <span id="matrixStage" class="text-indigo-400 font-bold">1</span></div>
+            <div>STATUS: <span id="matrixStatus" class="text-cyan-400 font-bold">MEMORIZE</span></div>
+          </div>
+
+          <div id="matrixGrid" class="grid grid-cols-3 gap-3 my-auto mx-auto w-full max-w-[260px]">
+            <!-- 9 Tiles populated via JS -->
+          </div>
+
+          <button onclick="startMatrixGame()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-orbitron font-bold text-white shadow-lg">START STAGE</button>
+        </div>
+      </div>
+
+      <!-- APP: BIRD SORT PUZZLE -->
+      <div id="birdsApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-sky-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-sky-300 font-bold flex items-center gap-2"><i class="fa-solid fa-crow"></i> BIRD SORT PUZZLE</span>
+          <button onclick="closeApp('birdsApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 flex flex-col bg-slate-950 p-3 overflow-hidden">
+          <div class="flex justify-between items-center px-1 mb-2">
+            <div>
+              <span class="text-xs font-orbitron font-bold text-cyan-400 block" id="birdLevelTitle">LEVEL 1</span>
+              <span class="text-[10px] font-mono text-slate-400" id="birdGameMsg">Sort all matching birds!</span>
+            </div>
+            <button onclick="initBirdGame(currentBirdLevel)" class="px-2.5 py-1 bg-sky-900/60 border border-sky-500/40 rounded-lg text-[10px] font-mono text-sky-200">Restart</button>
+          </div>
+          <div id="birdSticksGrid" class="flex-1 grid grid-cols-2 gap-2 p-1 overflow-y-auto custom-scroll"></div>
+          <div id="birdWinModal" class="p-3 mt-2 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-center hidden">
+            <h3 class="text-sm font-orbitron font-bold text-emerald-300">STAGE CLEAR! 🎉</h3>
+            <button onclick="nextBirdLevel()" class="w-full mt-2 py-2 bg-emerald-500 text-black font-orbitron font-bold text-xs rounded-lg shadow-lg">NEXT LEVEL 🚀</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: LAB-X CRAFT -->
+      <div id="labApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-purple-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-purple-300 font-bold"><i class="fa-solid fa-flask mr-2"></i> LAB-X CHEM CRAFT</span>
+          <button onclick="closeApp('labApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 flex flex-col bg-slate-950 p-3 overflow-y-auto custom-scroll text-xs">
+          <div id="labMixingBowl" class="w-24 h-24 mx-auto my-2 rounded-full border-4 border-purple-500/50 bg-purple-950/30 flex flex-col items-center justify-center p-2 text-center shadow-lg">
+            <i id="labBowlIcon" class="fa-solid fa-vial-circle-check text-3xl text-purple-400 mb-1"></i>
+            <span id="labBowlStatus" class="text-[9px] text-slate-300 font-mono">Select 2 Elements</span>
+          </div>
+          <div id="labSelectionText" class="text-center font-mono text-cyan-300 h-5 text-[10px] mb-2">Selected: None</div>
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <button onclick="selectChem('Fire 🔥')" class="p-2 bg-red-900/40 border border-red-500/40 rounded-xl text-red-200 font-bold">🔥 Fire</button>
+            <button onclick="selectChem('Water 💧')" class="p-2 bg-blue-900/40 border border-blue-500/40 rounded-xl text-blue-200 font-bold">💧 Water</button>
+            <button onclick="selectChem('Magic ✨')" class="p-2 bg-purple-900/40 border border-purple-500/40 rounded-xl text-purple-200 font-bold">✨ Magic</button>
+            <button onclick="selectChem('Plant 🌿')" class="p-2 bg-emerald-900/40 border border-emerald-500/40 rounded-xl text-emerald-200 font-bold">🌿 Plant</button>
+          </div>
+          <div class="flex gap-2 mb-2">
+            <button onclick="mixChems()" class="flex-1 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl font-orbitron font-bold text-white shadow-lg">MIX NOW!</button>
+            <button onclick="resetChem()" class="px-3 py-2 bg-slate-800 rounded-xl font-bold text-slate-300">Reset</button>
+          </div>
+          <div class="border-t border-slate-800 pt-2">
+            <span class="font-bold font-orbitron text-slate-400 text-[10px]">RECIPES DISCOVERED:</span>
+            <div id="chemDiscovered" class="flex flex-wrap gap-1 mt-1 font-mono text-[9px] text-emerald-400">
+              <span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Steam</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: LIFE SIMULATOR RPG -->
+      <div id="lifeApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-emerald-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-emerald-300 font-bold"><i class="fa-solid fa-user-ninja mr-2"></i> LIFE SIM RPG</span>
+          <button onclick="closeApp('lifeApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 p-4 flex flex-col justify-between text-xs font-mono">
+          <div class="p-3 bg-slate-900 border border-emerald-500/30 rounded-2xl space-y-1">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-1">
+              <span class="font-orbitron font-bold text-emerald-400 text-sm">Hero Stats</span>
+              <span id="lifeAge" class="text-slate-400">Age: 18</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1 text-[10px]">
+              <div>💵 Cash: <span id="lifeMoney" class="text-emerald-400 font-bold">$100</span></div>
+              <div>⚡ Energy: <span id="lifeEnergy" class="text-amber-400 font-bold">100%</span></div>
+              <div>🧠 Intellect: <span id="lifeIntel" class="text-cyan-400 font-bold">10</span></div>
+              <div>💪 Health: <span id="lifeHealth" class="text-rose-400 font-bold">100%</span></div>
+            </div>
+          </div>
+          <div id="lifeLog" class="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl h-32 overflow-y-auto custom-scroll space-y-1 text-[9px] text-slate-300">
+            <div class="text-emerald-400">Welcome to Life Simulator!</div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="lifeAction('work')" class="p-2 bg-emerald-900/40 border border-emerald-500/40 rounded-xl text-emerald-200 font-bold">💼 Work Job</button>
+            <button onclick="lifeAction('study')" class="p-2 bg-cyan-900/40 border border-cyan-500/40 rounded-xl text-cyan-200 font-bold">📚 Study Code</button>
+            <button onclick="lifeAction('gym')" class="p-2 bg-rose-900/40 border border-rose-500/40 rounded-xl text-rose-200 font-bold">🏋️ Gym</button>
+            <button onclick="lifeAction('sleep')" class="p-2 bg-amber-900/40 border border-amber-500/40 rounded-xl text-amber-200 font-bold">😴 Sleep</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: PHONK MUSIC SOUNDBOARD & AUDIO BEATS (10 BEATS) -->
+      <div id="musicApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-rose-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-rose-300 font-bold"><i class="fa-solid fa-music mr-2"></i> CYBER AUDIO SYNTH (10 BEATS)</span>
+          <button onclick="closeApp('musicApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 p-3 flex flex-col justify-between overflow-y-auto custom-scroll">
+          <div class="text-center my-1">
+            <div class="font-orbitron font-bold text-white text-sm">NEXUS Audio Synthesizer</div>
+            <div class="text-[10px] text-rose-400 font-mono">10 Synthetic Cyber Beats & Sound Effects</div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-2 font-mono text-[11px]">
+            <button onclick="playCyberBeat(1)" class="p-3 bg-rose-900/40 border border-rose-500/40 rounded-xl text-rose-300 font-bold hover:bg-rose-800/60 active:scale-95">🔥 1. Phonk Bass Kick</button>
+            <button onclick="playCyberBeat(2)" class="p-3 bg-purple-900/40 border border-purple-500/40 rounded-xl text-purple-300 font-bold hover:bg-purple-800/60 active:scale-95">⚡ 2. Cyber Laser Zap</button>
+            <button onclick="playCyberBeat(3)" class="p-3 bg-cyan-900/40 border border-cyan-500/40 rounded-xl text-cyan-300 font-bold hover:bg-cyan-800/60 active:scale-95">🌀 3. Sub Drop Boom</button>
+            <button onclick="playCyberBeat(4)" class="p-3 bg-amber-900/40 border border-amber-500/40 rounded-xl text-amber-300 font-bold hover:bg-amber-800/60 active:scale-95">🎹 4. Synthwave Arp</button>
+            <button onclick="playCyberBeat(5)" class="p-3 bg-emerald-900/40 border border-emerald-500/40 rounded-xl text-emerald-300 font-bold hover:bg-emerald-800/60 active:scale-95">👾 5. 8-Bit Glitch Sound</button>
+            <button onclick="playCyberBeat(6)" class="p-3 bg-indigo-900/40 border border-indigo-500/40 rounded-xl text-indigo-300 font-bold hover:bg-indigo-800/60 active:scale-95">🚀 6. Hyperdrive Engine</button>
+            <button onclick="playCyberBeat(7)" class="p-3 bg-pink-900/40 border border-pink-500/40 rounded-xl text-pink-300 font-bold hover:bg-pink-800/60 active:scale-95">💥 7. Quantum Explosion</button>
+            <button onclick="playCyberBeat(8)" class="p-3 bg-sky-900/40 border border-sky-500/40 rounded-xl text-sky-300 font-bold hover:bg-sky-800/60 active:scale-95">🔔 8. Neon Ping Chime</button>
+            <button onclick="playCyberBeat(9)" class="p-3 bg-red-900/40 border border-red-500/40 rounded-xl text-red-300 font-bold hover:bg-red-800/60 active:scale-95">☣️ 9. Bio Hazard Siren</button>
+            <button onclick="playCyberBeat(10)" class="p-3 bg-amber-800/40 border border-amber-400/40 rounded-xl text-amber-200 font-bold hover:bg-amber-700/60 active:scale-95">🥁 10. Drift Cowbell Beat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEW APP 1: NEON TERMINAL CONSOLE -->
+      <div id="terminalApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-emerald-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-emerald-400 font-bold"><i class="fa-solid fa-terminal mr-2"></i> NEON TERMINAL v2.0</span>
+          <button onclick="closeApp('terminalApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-black p-3 flex flex-col font-mono text-xs text-emerald-400">
+          <div id="terminalLogs" class="flex-1 overflow-y-auto custom-scroll space-y-1">
+            <div>NEXUS OS Kernel [Version 2.0.35]</div>
+            <div>Type <span class="text-amber-300">'help'</span> for available commands.</div>
+          </div>
+          <div class="flex items-center gap-2 border-t border-slate-800 pt-2">
+            <span class="text-emerald-500">$</span>
+            <input type="text" id="terminalInput" onkeydown="handleTerminalCommand(event)" placeholder="Enter command..." class="flex-1 bg-transparent text-white focus:outline-none" />
+          </div>
+        </div>
+      </div>
+
+      <!-- NEW APP 2: CYBER HOLOGRAM VISUALIZER -->
+      <div id="holoApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-cyan-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-cyan-300 font-bold"><i class="fa-solid fa-vr-cardboard mr-2"></i> 3D HOLOGRAM ENGINE</span>
+          <button onclick="closeApp('holoApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 flex flex-col relative overflow-hidden">
+          <canvas id="holoCanvas" class="w-full h-full block"></canvas>
+          <div class="absolute bottom-3 left-3 right-3 flex justify-around">
+            <button onclick="changeHoloShape('cube')" class="px-3 py-1 bg-cyan-900/60 border border-cyan-400 rounded text-[10px] font-mono text-cyan-200">Cube</button>
+            <button onclick="changeHoloShape('torus')" class="px-3 py-1 bg-cyan-900/60 border border-cyan-400 rounded text-[10px] font-mono text-cyan-200">Torus</button>
+            <button onclick="changeHoloShape('sphere')" class="px-3 py-1 bg-cyan-900/60 border border-cyan-400 rounded text-[10px] font-mono text-cyan-200">Sphere</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: CALCULATOR -->
+      <div id="calcApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-emerald-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-emerald-300 font-bold"><i class="fa-solid fa-calculator mr-2"></i> CALCULATOR</span>
+          <button onclick="closeApp('calcApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <div class="flex-1 bg-slate-950 p-4 flex flex-col justify-between">
+          <div id="mCalcScreen" class="bg-slate-900 p-4 rounded-xl text-right font-mono text-2xl text-emerald-400 border border-slate-800">0</div>
+          <div class="grid grid-cols-4 gap-2 font-orbitron text-sm">
+            <button onclick="mCalc('C')" class="p-3 bg-rose-900/40 rounded-xl text-rose-300">C</button>
+            <button onclick="mCalc('/')" class="p-3 bg-slate-800 rounded-xl text-cyan-300">/</button>
+            <button onclick="mCalc('*')" class="p-3 bg-slate-800 rounded-xl text-cyan-300">*</button>
+            <button onclick="mCalc('-')" class="p-3 bg-slate-800 rounded-xl text-cyan-300">-</button>
+            <button onclick="mCalc('7')" class="p-3 bg-slate-900 rounded-xl text-white">7</button>
+            <button onclick="mCalc('8')" class="p-3 bg-slate-900 rounded-xl text-white">8</button>
+            <button onclick="mCalc('9')" class="p-3 bg-slate-900 rounded-xl text-white">9</button>
+            <button onclick="mCalc('+')" class="p-3 bg-slate-800 rounded-xl text-cyan-300">+</button>
+            <button onclick="mCalc('4')" class="p-3 bg-slate-900 rounded-xl text-white">4</button>
+            <button onclick="mCalc('5')" class="p-3 bg-slate-900 rounded-xl text-white">5</button>
+            <button onclick="mCalc('6')" class="p-3 bg-slate-900 rounded-xl text-white">6</button>
+            <button onclick="mCalcEqual()" class="p-3 bg-emerald-600 rounded-xl text-white font-bold row-span-2 flex items-center justify-center">=</button>
+            <button onclick="mCalc('1')" class="p-3 bg-slate-900 rounded-xl text-white">1</button>
+            <button onclick="mCalc('2')" class="p-3 bg-slate-900 rounded-xl text-white">2</button>
+            <button onclick="mCalc('3')" class="p-3 bg-slate-900 rounded-xl text-white">3</button>
+            <button onclick="mCalc('0')" class="p-3 bg-slate-900 rounded-xl text-white col-span-2">0</button>
+            <button onclick="mCalc('.')" class="p-3 bg-slate-900 rounded-xl text-white">.</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- APP: NOTES -->
+      <div id="notesApp" class="mobile-app absolute inset-0 hidden pointer-events-auto glass-app flex flex-col pt-10">
+        <div class="h-10 bg-slate-900 border-b border-yellow-500/30 flex items-center justify-between px-4 text-xs font-orbitron">
+          <span class="text-yellow-300 font-bold"><i class="fa-solid fa-note-sticky mr-2"></i> NOTES</span>
+          <button onclick="closeApp('notesApp')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+        <textarea placeholder="Write notes..." class="flex-1 bg-slate-950 p-4 text-xs font-mono text-amber-200 focus:outline-none resize-none">NEXUS Mobile System Log v2.0:
+- Integrated Cyber Space Shooter Game.
+- Integrated Grid Memory Matrix Game.
+- Added 10-Audio Beat Synthesizer Engine.
+- Added Terminal Console & 3D Hologram Visualizer.</textarea>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM GESTURE NAVIGATION BAR -->
+    <div class="w-full h-6 bg-black flex items-center justify-center z-50">
+      <button onclick="goHome()" class="w-32 h-1 bg-slate-600 hover:bg-cyan-400 rounded-full transition active:scale-95"></button>
+    </div>
+
+  </div>
+
+  <!-- MAIN JAVASCRIPT ENGINE -->
+  <script>
+    /* 1. CONFIG & SYSTEM GLOBALS */
+    const NASA_API_KEY = "DEMO_KEY";
+    const TODAY_DATE = new Date().toISOString().split('T')[0];
+    const NASA_NEO_URL = `https://api.nasa.gov/neo/rest/v1/feed?start_date=${TODAY_DATE}&end_date=${TODAY_DATE}&api_key=${NASA_API_KEY}`;
+    const NASA_APOD_URL = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}`;
+
+    let scene, camera, renderer, controls;
+    let timeScale = 1.0;
+    let celestialObjects = {};
+    let asteroidObjects = [];
+    let spacecraftObjects = [];
+    let focusedObject = null;
+    let followingObject = null;
+    let audioCtx = null, synthOsc = null, synthGain = null;
+    let isAudioPlaying = false;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const PLANET_DATA = [
+      { name: 'Sun', radius: 16, dist: 0, speed: 0, color: 0xffaa00, type: 'Star (G2V)', temp: '5,778 K', diameter: '1,392,700 km', moons: 0, desc: 'Central star containing 99.86% of total system mass.' },
+      { name: 'Mercury', radius: 1.4, dist: 30, speed: 0.04, color: 0xa6a6a6, type: 'Terrestrial Planet', temp: '440 K', diameter: '4,879 km', moons: 0, desc: 'Innermost rocky planet with extreme temperature variations.' },
+      { name: 'Venus', radius: 2.2, dist: 45, speed: 0.015, color: 0xe3bb76, type: 'Terrestrial Planet', temp: '737 K', diameter: '12,104 km', moons: 0, desc: 'Dense runaway greenhouse atmosphere.' },
+      { name: 'Earth', radius: 2.4, dist: 68, speed: 0.01, color: 0x2b82c5, type: 'Terrestrial Planet', temp: '288 K', diameter: '12,742 km', moons: 1, desc: 'Home planet, host to surface liquid oceans and biological life.' },
+      { name: 'Mars', radius: 1.8, dist: 96, speed: 0.008, color: 0xc1440e, type: 'Terrestrial Planet', temp: '210 K', diameter: '6,779 km', moons: 2, desc: 'The Red Planet, featuring iron oxide soil and Olympus Mons.' },
+      { name: 'Jupiter', radius: 6.8, dist: 145, speed: 0.004, color: 0xb07f35, type: 'Gas Giant', temp: '165 K', diameter: '139,820 km', moons: 95, desc: 'Largest planet featuring the Great Red Spot storm.' },
+      { name: 'Saturn', radius: 5.6, dist: 200, speed: 0.002, color: 0xe2bf7d, hasRings: true, type: 'Gas Giant', temp: '134 K', diameter: '116,460 km', moons: 146, desc: 'Adorned with an extensive ring system.' },
+      { name: 'Uranus', radius: 4.0, dist: 255, speed: 0.0014, color: 0x4b70dd, type: 'Ice Giant', temp: '76 K', diameter: '50,724 km', moons: 28, desc: 'Ice giant with a unique 98-degree axial tilt.' },
+      { name: 'Neptune', radius: 3.8, dist: 300, speed: 0.001, color: 0x274687, type: 'Ice Giant', temp: '72 K', diameter: '49,244 km', moons: 16, desc: 'Distant ice giant featuring supersonic winds.' }
+    ];
+
+    function launchExternalApp(url) {
+      window.open(url, '_blank');
+    }
+
+    /* 2. THREE.JS ENGINE INITIALIZATION */
+    function initEngine() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x020208, 0.00025);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500000);
+      camera.position.set(0, 110, 240);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 25000;
+      controls.minDistance = 1.0;
+
+      const ambientLight = new THREE.AmbientLight(0x333355, 1.4);
+      scene.add(ambientLight);
+
+      const sunLight = new THREE.PointLight(0xffffff, 2.8, 2000, 0.4);
+      scene.add(sunLight);
+
+      createStarfield();
+      createSolarSystem();
+      createAsteroidBelt();
+      createSpacecraftLayer();
+      
+      fetchNASALiveMeteors();
+      fetchNASAAPOD();
+      generateCelestialNavList();
+
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('dblclick', onSceneDoubleClick);
+
+      setInterval(updateSysClock, 1000);
+      updateSysClock();
+
+      animate();
+    }
+
+    function generatePlanetTexture(baseColorHex, detailType = 'standard') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512; canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#' + baseColorHex.toString(16).padStart(6, '0');
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < canvas.height; i++) {
+        let noise = Math.sin(i * 0.1) * 15 + Math.random() * 10;
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08})`;
+        ctx.fillRect(0, i, canvas.width, 1 + noise * 0.2);
+      }
+
+      if (detailType === 'earth') {
+        ctx.fillStyle = '#1e3d59';
+        for (let i = 0; i < 18; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, 25 + Math.random() * 35, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(46, 117, 89, 0.65)';
+          ctx.fill();
+        }
+      }
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    function createSolarSystem() {
+      const solarGroup = new THREE.Group();
+      solarGroup.name = 'SolarSystemGroup';
+      scene.add(solarGroup);
+
+      PLANET_DATA.forEach((p) => {
+        let mesh;
+        if (p.name === 'Sun') {
+          const geom = new THREE.SphereGeometry(p.radius, 64, 64);
+          const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+          mesh = new THREE.Mesh(geom, mat);
+
+          const haloGeom = new THREE.SphereGeometry(p.radius * 1.25, 32, 32);
+          const haloMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.25, side: THREE.BackSide });
+          mesh.add(new THREE.Mesh(haloGeom, haloMat));
+        } else {
+          const orbitGeom = new THREE.BufferGeometry();
+          const points = [];
+          for (let i = 0; i <= 128; i++) {
+            const theta = (i / 128) * Math.PI * 2;
+            points.push(new THREE.Vector3(Math.cos(theta) * p.dist, 0, Math.sin(theta) * p.dist));
+          }
+          orbitGeom.setFromPoints(points);
+          const orbitMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.2 });
+          solarGroup.add(new THREE.Line(orbitGeom, orbitMat));
+
+          const texture = generatePlanetTexture(p.color, p.name.toLowerCase());
+          const geom = new THREE.SphereGeometry(p.radius, 32, 32);
+          const mat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.7, metalness: 0.1 });
+          mesh = new THREE.Mesh(geom, mat);
+
+          if (p.hasRings) {
+            const ringGeom = new THREE.RingGeometry(p.radius * 1.4, p.radius * 2.3, 64);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xd4af37, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+            const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+            ringMesh.rotation.x = Math.PI / 2.3;
+            mesh.add(ringMesh);
+          }
+
+          if (p.name === 'Earth') {
+            const atmosphere = new THREE.Mesh(
+              new THREE.SphereGeometry(p.radius * 1.1, 32, 32),
+              new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.18, side: THREE.BackSide })
+            );
+            mesh.add(atmosphere);
+
+            const moonGeom = new THREE.SphereGeometry(0.65, 16, 16);
+            const moonMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
+            const moonMesh = new THREE.Mesh(moonGeom, moonMat);
+            moonMesh.position.set(5.5, 0, 0);
+            moonMesh.name = 'Moon';
+            moonMesh.userData = { name: 'Moon', type: 'Natural Satellite', diameter: '3,474 km', temp: '120 K', desc: 'Earth\'s natural satellite.' };
+            mesh.add(moonMesh);
+            celestialObjects['Moon'] = moonMesh;
+          }
+        }
+
+        mesh.position.x = p.dist;
+        mesh.userData = { ...p, currentAngle: Math.random() * Math.PI * 2 };
+        solarGroup.add(mesh);
+        celestialObjects[p.name] = mesh;
+      });
+    }
+
+    function createAsteroidBelt() {
+      const beltGroup = new THREE.Group();
+      beltGroup.name = 'AsteroidBeltGroup';
+
+      const count = 1200;
+      const geom = new THREE.DodecahedronGeometry(0.3, 1);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 });
+      const instancedMesh = new THREE.InstancedMesh(geom, mat, count);
+      const dummy = new THREE.Object3D();
+
+      for (let i = 0; i < count; i++) {
+        const dist = 115 + Math.random() * 22;
+        const angle = Math.random() * Math.PI * 2;
+        const yOffset = (Math.random() - 0.5) * 6;
+
+        dummy.position.set(Math.cos(angle) * dist, yOffset, Math.sin(angle) * dist);
+        dummy.scale.setScalar(0.5 + Math.random() * 1.2);
+        dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+        dummy.updateMatrix();
+        instancedMesh.setMatrixAt(i, dummy.matrix);
+      }
+
+      beltGroup.add(instancedMesh);
+      scene.add(beltGroup);
+    }
+
+    function createSpacecraftLayer() {
+      const craftGroup = new THREE.Group();
+      craftGroup.name = 'SpacecraftGroup';
+
+      const crafts = [
+        { name: 'JWST (James Webb Space Telescope)', parent: 'Sun', offset: new THREE.Vector3(75, 2, 5), type: 'Space Observatory', desc: 'NASA deep space observatory.' },
+        { name: 'Artemis Orion Spacecraft', parent: 'Earth', offset: new THREE.Vector3(7, 1, 2), type: 'Manned Deep-Space Vehicle', desc: 'NASA lunar exploration program.' }
+      ];
+
+      crafts.forEach((c) => {
+        const geom = new THREE.ConeGeometry(0.5, 1.2, 5);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true });
+        const mesh = new THREE.Mesh(geom, mat);
+        
+        mesh.position.copy(c.offset);
+        mesh.userData = { ...c };
+        
+        const parentObj = celestialObjects[c.parent];
+        if (parentObj) parentObj.add(mesh);
+        else craftGroup.add(mesh);
+
+        spacecraftObjects.push(mesh);
+        celestialObjects[c.name] = mesh;
+      });
+
+      scene.add(craftGroup);
+    }
+
+    function createStarfield() {
+      const starGeom = new THREE.BufferGeometry();
+      const count = 40000;
+      const positions = new Float32Array(count * 3);
+
+      for (let i = 0; i < count * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 90000;
+        positions[i + 1] = (Math.random() - 0.5) * 90000;
+        positions[i + 2] = (Math.random() - 0.5) * 90000;
+      }
+
+      starGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const starMat = new THREE.PointsMaterial({ size: 1.2, color: 0xffffff, transparent: true, opacity: 0.8 });
+      scene.add(new THREE.Points(starGeom, starMat));
+    }
+
+    /* 3. NASA DATA FEED */
+    function populateSimulatedAsteroids() {
+      const countEl = document.getElementById('asteroid-count');
+      const listEl = document.getElementById('asteroid-list');
+      const badgeEl = document.getElementById('data-source-badge');
+      const earthMesh = celestialObjects['Earth'];
+
+      badgeEl.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40';
+      badgeEl.innerText = 'SIMULATED TRAJECTORY';
+      countEl.innerText = '8 NEO Asteroids';
+      listEl.innerHTML = '';
+
+      const fallbackData = [
+        { name: '433 Eros', hazard: false, diameter: 16800, velocity: 84600, miss: 22000000 },
+        { name: '99942 Apophis', hazard: true, diameter: 370, velocity: 107280, miss: 31000 },
+        { name: '101955 Bennu', hazard: true, diameter: 490, velocity: 101000, miss: 480000 },
+        { name: '4179 Toutatis', hazard: true, diameter: 2450, velocity: 39600, miss: 1500000 },
+        { name: '3122 Florence', hazard: false, diameter: 4900, velocity: 50292, miss: 7000000 },
+        { name: '162173 Ryugu', hazard: false, diameter: 900, velocity: 97920, miss: 9500000 },
+        { name: '2023 DW', hazard: true, diameter: 50, velocity: 88560, miss: 1800000 },
+        { name: '2024 BX1', hazard: false, diameter: 1, velocity: 54000, miss: 12000 }
+      ];
+
+      fallbackData.forEach((ast, idx) => {
+        const astGroup = new THREE.Group();
+        const orbitRadius = 7 + Math.random() * 16;
+        const orbitAngle = (idx / fallbackData.length) * Math.PI * 2;
+
+        const astGeom = new THREE.DodecahedronGeometry(0.35 + Math.random() * 0.4, 1);
+        const astMat = new THREE.MeshStandardMaterial({
+          color: ast.hazard ? 0xff4444 : 0xaaaaaa,
+          roughness: 0.9
+        });
+        const astMesh = new THREE.Mesh(astGeom, astMat);
+
+        astMesh.position.set(Math.cos(orbitAngle) * orbitRadius, (Math.random() - 0.5) * 4, Math.sin(orbitAngle) * orbitRadius);
+        astGroup.add(astMesh);
+        if (earthMesh) earthMesh.add(astGroup);
+
+        const astData = {
+          name: `Asteroid ${ast.name}`,
+          isHazard: ast.hazard,
+          diameter: ast.diameter,
+          missDistKm: ast.miss.toLocaleString(),
+          velocity: ast.velocity.toLocaleString(),
+          mesh: astMesh,
+          type: 'Near-Earth Object (NEO)',
+          desc: `Simulated orbital trajectory telemetry. Potentially hazardous: ${ast.hazard ? 'YES' : 'NO'}.`
+        };
+
+        astMesh.userData = astData;
+        asteroidObjects.push(astMesh);
+
+        const card = document.createElement('div');
+        card.className = `p-2 rounded-xl border transition-all cursor-pointer ${
+          ast.hazard ? 'bg-red-950/30 border-red-500/40 hover:bg-red-900/40' : 'bg-slate-900/50 border-sky-500/20 hover:bg-slate-800/60'
+        }`;
+        card.onclick = () => inspectAsteroid(astData);
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-0.5">
+            <span class="font-bold text-xs text-white truncate max-w-[170px]">${ast.name}</span>
+            <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+              ast.hazard ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/20 text-emerald-300'
+            }">${ast.hazard ? 'HAZARD' : 'SAFE'}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-1 text-[9px] text-slate-300">
+            <div><i class="fa-solid fa-ruler text-sky-400"></i> ${ast.diameter}m size</div>
+            <div><i class="fa-solid fa-gauge text-amber-400"></i> ${ast.velocity.toLocaleString()} km/h</div>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    async function fetchNASALiveMeteors() {
+      const countEl = document.getElementById('asteroid-count');
+      const listEl = document.getElementById('asteroid-list');
+      const badgeEl = document.getElementById('data-source-badge');
+
+      try {
+        const response = await fetch(NASA_NEO_URL);
+        if (!response.ok) throw new Error("NASA API limit reached or offline");
+        const data = await response.json();
+        const asteroids = data.near_earth_objects[TODAY_DATE] || [];
+
+        if (asteroids.length === 0) {
+          populateSimulatedAsteroids();
+          return;
+        }
+
+        badgeEl.className = 'px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40';
+        badgeEl.innerText = 'LIVE NASA DATA';
+
+        countEl.innerText = `${asteroids.length} NEO Asteroids`;
+        listEl.innerHTML = '';
+
+        const earthMesh = celestialObjects['Earth'];
+
+        asteroids.forEach((ast, idx) => {
+          const name = ast.name.replace('(', '').replace(')', '');
+          const isHazard = ast.is_potentially_hazardous_asteroid;
+          const diameter = Math.round(ast.estimated_diameter.meters.estimated_diameter_max);
+          const missDistKm = Math.round(parseFloat(ast.close_approach_data[0].miss_distance.kilometers)).toLocaleString();
+          const velocity = Math.round(parseFloat(ast.close_approach_data[0].relative_velocity.kilometers_per_hour)).toLocaleString();
+
+          const astGroup = new THREE.Group();
+          const orbitRadius = 7 + Math.random() * 16;
+          const orbitAngle = (idx / asteroids.length) * Math.PI * 2;
+
+          const astGeom = new THREE.DodecahedronGeometry(0.35 + Math.random() * 0.4, 1);
+          const astMat = new THREE.MeshStandardMaterial({
+            color: isHazard ? 0xff4444 : 0xaaaaaa,
+            roughness: 0.9
+          });
+          const astMesh = new THREE.Mesh(astGeom, astMat);
+
+          astMesh.position.set(Math.cos(orbitAngle) * orbitRadius, (Math.random() - 0.5) * 4, Math.sin(orbitAngle) * orbitRadius);
+          astGroup.add(astMesh);
+          
+          if (earthMesh) earthMesh.add(astGroup);
+
+          const astData = {
+            name: `Asteroid ${name}`,
+            isHazard, diameter, missDistKm, velocity,
+            mesh: astMesh,
+            type: 'Near-Earth Object (NEO)',
+            desc: `Real NASA NeoWS telemetry data. Potentially hazardous: ${isHazard ? 'YES' : 'NO'}.`
+          };
+          
+          astMesh.userData = astData;
+          asteroidObjects.push(astMesh);
+
+          const card = document.createElement('div');
+          card.className = `p-2 rounded-xl border transition-all cursor-pointer ${
+            isHazard ? 'bg-red-950/30 border-red-500/40 hover:bg-red-900/40' : 'bg-slate-900/50 border-sky-500/20 hover:bg-slate-800/60'
+          }`;
+          card.onclick = () => inspectAsteroid(astData);
+          card.innerHTML = `
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="font-bold text-xs text-white truncate max-w-[170px]">${name}</span>
+              <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                isHazard ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/20 text-emerald-300'
+              }">${isHazard ? 'HAZARD' : 'SAFE'}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-1 text-[9px] text-slate-300">
+              <div><i class="fa-solid fa-ruler text-sky-400"></i> ${diameter}m size</div>
+              <div><i class="fa-solid fa-gauge text-amber-400"></i> ${velocity} km/h</div>
+            </div>
+          `;
+          listEl.appendChild(card);
+        });
+
+      } catch (err) {
+        populateSimulatedAsteroids();
+      }
+    }
+
+    async function fetchNASAAPOD() {
+      try {
+        const res = await fetch(NASA_APOD_URL);
+        const data = await res.json();
+        if (data && data.title) {
+          document.getElementById('apod-box').classList.remove('hidden');
+          document.getElementById('apod-title').innerText = `NASA APOD: ${data.title}`;
+          document.getElementById('apod-desc').innerText = data.explanation || '';
+        }
+      } catch (e) {}
+    }
+
+    /* 4. UI INTERACTION & CAMERA TRACKING */
+    function generateCelestialNavList() {
+      const listEl = document.getElementById('celestial-list');
+      listEl.innerHTML = '';
+
+      PLANET_DATA.forEach((p) => {
+        const btn = document.createElement('button');
+        btn.className = 'w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-semibold glass-button flex items-center justify-between text-slate-200 hover:text-cyan-300 font-mono';
+        btn.onclick = () => focusTarget(p.name);
+        btn.innerHTML = `
+          <span class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full" style="background-color: #${p.color.toString(16)}"></span>
+            <span>${p.name}</span>
+          </span>
+          <i class="fa-solid fa-chevron-right text-[9px] opacity-40"></i>
+        `;
+        listEl.appendChild(btn);
+      });
+    }
+
+    function handleSearch(query) {
+      const q = query.toLowerCase().trim();
+      if (!q) return;
+
+      const keys = Object.keys(celestialObjects);
+      const matched = keys.find(k => k.toLowerCase().includes(q));
+      if (matched) focusTarget(matched);
+    }
+
+    function onSceneDoubleClick(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+
+      if (intersects.length > 0) {
+        let hitObj = intersects[0].object;
+        while (hitObj && !hitObj.userData.name && hitObj.parent) {
+          hitObj = hitObj.parent;
+        }
+
+        if (hitObj && hitObj.userData && hitObj.userData.name) {
+          if (hitObj.userData.type === 'Near-Earth Object (NEO)') {
+            inspectAsteroid(hitObj.userData);
+          } else {
+            focusTarget(hitObj.userData.name);
+            openModal(hitObj.userData);
+          }
+        }
+      }
+    }
+
+    function focusTarget(name) {
+      const obj = celestialObjects[name];
+      if (!obj) return;
+
+      focusedObject = obj;
+      followingObject = null;
+      const targetPos = new THREE.Vector3();
+      obj.getWorldPosition(targetPos);
+
+      const offset = (obj.userData.radius || obj.userData.size || 5) * 4 + 10;
+      const newCamPos = new THREE.Vector3().copy(targetPos).add(new THREE.Vector3(offset, offset * 0.5, offset));
+
+      animateCameraTo(newCamPos, targetPos);
+    }
+
+    function followCurrentTarget() {
+      if (focusedObject) {
+        followingObject = focusedObject;
+        closeModal();
+      }
+    }
+
+    function animateCameraTo(newPos, targetCenter) {
+      const duration = 1000;
+      const startPos = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const startTime = performance.now();
+
+      function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
+
+        camera.position.lerpVectors(startPos, newPos, easeProgress);
+        controls.target.lerpVectors(startTarget, targetCenter, easeProgress);
+        controls.update();
+
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    function resetCamera() {
+      focusedObject = null;
+      followingObject = null;
+      animateCameraTo(new THREE.Vector3(0, 110, 240), new THREE.Vector3(0, 0, 0));
+    }
+
+    function inspectAsteroid(astData) {
+      if (astData.mesh) {
+        const worldPos = new THREE.Vector3();
+        astData.mesh.getWorldPosition(worldPos);
+        animateCameraTo(new THREE.Vector3().copy(worldPos).add(new THREE.Vector3(4, 3, 4)), worldPos);
+      }
+
+      openModal({
+        name: astData.name,
+        type: astData.type,
+        isHazard: astData.isHazard,
+        gridData: [
+          { label: 'Potentially Hazardous', val: astData.isHazard ? 'YES (DANGER)' : 'NO (SAFE)' },
+          { label: 'Estimated Diameter', val: `${astData.diameter} Meters` },
+          { label: 'Earth Miss Distance', val: `${astData.missDistKm} km` },
+          { label: 'Relative Velocity', val: `${astData.velocity} km/h` }
+        ],
+        desc: astData.desc
+      });
+    }
+
+    function openModal(data) {
+      const modal = document.getElementById('telemetry-modal');
+      const titleEl = document.getElementById('modal-title');
+      const badgeEl = document.getElementById('modal-badge');
+      const gridEl = document.getElementById('modal-grid');
+      const descEl = document.getElementById('modal-description');
+
+      titleEl.innerText = data.name;
+      descEl.innerText = data.desc || data.description || 'N/A';
+
+      if (data.isHazard !== undefined) {
+        badgeEl.className = `inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mt-0.5 ${
+          data.isHazard ? 'bg-red-500/30 text-red-300 border border-red-500/50' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+        }`;
+        badgeEl.innerText = data.isHazard ? '⚠️ DANGER ASTEROID' : '✅ SAFE PASSAGE';
+      } else {
+        badgeEl.className = 'inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mt-0.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
+        badgeEl.innerText = data.type || 'CELESTIAL OBJECT';
+      }
+
+      gridEl.innerHTML = '';
+      const items = data.gridData || [
+        { label: 'Object Type', val: data.type || 'Planet' },
+        { label: 'Mean Diameter', val: data.diameter || 'N/A' },
+        { label: 'Surface Temperature', val: data.temp || 'N/A' },
+        { label: 'Known Moons', val: data.moons !== undefined ? data.moons : 'N/A' }
+      ];
+
+      items.forEach((item) => {
+        gridEl.innerHTML += `
+          <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
+            <div class="text-[9px] text-slate-400 font-medium">${item.label}</div>
+            <div class="text-xs font-bold text-cyan-300 mt-0.5">${item.val}</div>
+          </div>
+        `;
+      });
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('telemetry-modal').classList.add('hidden');
+    }
+
+    function setTimeScale(val) {
+      timeScale = parseFloat(val);
+      document.getElementById('speed-val').innerText = `${timeScale.toFixed(1)}x`;
+      document.getElementById('time-scale-val').innerText = `${timeScale.toFixed(1)}x`;
+      document.getElementById('sim-status').innerText = timeScale === 0 ? 'PAUSED' : 'ACTIVE';
+      document.getElementById('sim-status').className = timeScale === 0 ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold';
+    }
+
+    function updateSysClock() {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      document.getElementById('sys-clock').innerText = timeStr;
+      document.getElementById('statusBarClock').innerText = timeStr.substring(0, 5);
+      document.getElementById('lockTime').innerText = timeStr.substring(0, 5);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Orbital Rotation Logic
+      PLANET_DATA.forEach((p) => {
+        if (p.name !== 'Sun') {
+          const mesh = celestialObjects[p.name];
+          if (mesh) {
+            mesh.userData.currentAngle += p.speed * 0.05 * timeScale;
+            mesh.position.x = Math.cos(mesh.userData.currentAngle) * p.dist;
+            mesh.position.z = Math.sin(mesh.userData.currentAngle) * p.dist;
+            mesh.rotation.y += 0.01 * timeScale;
+          }
+        }
+      });
+
+      asteroidObjects.forEach((ast) => {
+        ast.rotation.x += 0.01;
+        ast.rotation.y += 0.01;
+      });
+
+      if (followingObject) {
+        const targetPos = new THREE.Vector3();
+        followingObject.getWorldPosition(targetPos);
+        controls.target.copy(targetPos);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    /* 5. AUDIO SYNTH ENGINE (BACKGROUND & SOUND EFFECTS) */
+    function toggleAudio() {
+      const btnIcon = document.getElementById('audio-icon');
+
+      if (!isAudioPlaying) {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          synthOsc = audioCtx.createOscillator();
+          synthGain = audioCtx.createGain();
+
+          synthOsc.type = 'sine';
+          synthOsc.frequency.setValueAtTime(50, audioCtx.currentTime);
+          synthGain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+
+          synthOsc.connect(synthGain);
+          synthGain.connect(audioCtx.destination);
+          synthOsc.start();
+        } else {
+          audioCtx.resume();
+        }
+        isAudioPlaying = true;
+        btnIcon.className = 'fa-solid fa-volume-high text-cyan-400';
+      } else {
+        if (audioCtx) audioCtx.suspend();
+        isAudioPlaying = false;
+        btnIcon.className = 'fa-solid fa-volume-xmark';
+      }
+    }
+
+    /* SYNTHESIS ENGINE: 10 DISTINCT AUDIO BEATS & SOUND EFFECTS */
+    function playCyberBeat(type) {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+
+      switch(type) {
+        case 1:
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(160, now);
+          osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+          gain.gain.setValueAtTime(0.8, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+          osc.start(now); osc.stop(now + 0.3);
+          break;
+        case 2:
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now); osc.stop(now + 0.15);
+          break;
+        case 3:
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.exponentialRampToValueAtTime(20, now + 0.8);
+          gain.gain.setValueAtTime(0.7, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+          osc.start(now); osc.stop(now + 0.8);
+          break;
+        case 4:
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.setValueAtTime(554.37, now + 0.1);
+          osc.frequency.setValueAtTime(659.25, now + 0.2);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+          osc.start(now); osc.stop(now + 0.35);
+          break;
+        case 5:
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(150, now);
+          osc.frequency.setValueAtTime(600, now + 0.05);
+          osc.frequency.setValueAtTime(300, now + 0.1);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+          osc.start(now); osc.stop(now + 0.2);
+          break;
+        case 6:
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(100, now);
+          osc.frequency.exponentialRampToValueAtTime(1200, now + 0.6);
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+          osc.start(now); osc.stop(now + 0.6);
+          break;
+        case 7:
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(120, now);
+          osc.frequency.linearRampToValueAtTime(40, now + 0.5);
+          gain.gain.setValueAtTime(0.6, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+          osc.start(now); osc.stop(now + 0.5);
+          break;
+        case 8:
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.setValueAtTime(1760, now + 0.1);
+          gain.gain.setValueAtTime(0.5, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+          osc.start(now); osc.stop(now + 0.4);
+          break;
+        case 9:
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(500, now);
+          osc.frequency.linearRampToValueAtTime(900, now + 0.25);
+          osc.frequency.linearRampToValueAtTime(500, now + 0.5);
+          gain.gain.setValueAtTime(0.4, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+          osc.start(now); osc.stop(now + 0.5);
+          break;
+        case 10:
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(800, now);
+          gain.gain.setValueAtTime(0.5, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now); osc.stop(now + 0.15);
+          break;
+      }
+    }
+
+    function toggleDrawer(id) {
+      const drawer = document.getElementById(id);
+      if (id === 'left-drawer') {
+        drawer.classList.toggle('drawer-closed-left');
+      } else {
+        drawer.classList.toggle('drawer-closed-right');
+      }
+    }
+
+    /* 6. MOBILE OS SHELL */
+    function toggleMobilePhone() {
+      const phone = document.getElementById('phoneShell');
+      phone.classList.toggle('hidden');
+      phone.classList.toggle('flex');
+    }
+
+    function unlockPhone() {
+      document.getElementById('lockScreen').classList.add('-translate-y-full');
+    }
+
+    function openApp(id) {
+      closeAllApps();
+      const app = document.getElementById(id);
+      if (app) {
+        app.classList.remove('hidden');
+        if (id === 'cityApp') initNeonCityGame();
+        if (id === 'shooterApp') initShooterGame();
+        if (id === 'matrixApp') initMatrixGridUI();
+        if (id === 'birdsApp') initBirdGame(currentBirdLevel);
+        if (id === 'holoApp') initHoloEngine();
+      }
+    }
+
+    function closeApp(id) {
+      const app = document.getElementById(id);
+      if (app) app.classList.add('hidden');
+      if (id === 'cityApp' && neonAnimId) cancelAnimationFrame(neonAnimId);
+      if (id === 'shooterApp' && shooterAnimId) cancelAnimationFrame(shooterAnimId);
+    }
+
+    function closeAllApps() {
+      document.querySelectorAll('.mobile-app').forEach(app => app.classList.add('hidden'));
+      if (neonAnimId) cancelAnimationFrame(neonAnimId);
+      if (shooterAnimId) cancelAnimationFrame(shooterAnimId);
+    }
+
+    function goHome() {
+      closeAllApps();
+    }
+
+    window.addEventListener('load', () => {
+      initEngine();
+
+      const canvas = document.getElementById('phoneBgCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let w = canvas.width = canvas.parentElement.clientWidth;
+      let h = canvas.height = canvas.parentElement.clientHeight;
+
+      let particles = Array.from({length: 30}, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 2 + 1,
+        vy: Math.random() * 0.5 + 0.2
+      }));
+
+      function animBg() {
+        ctx.clearRect(0,0,w,h);
+        ctx.fillStyle = '#00f3ff';
+        particles.forEach(p => {
+          p.y -= p.vy;
+          if (p.y < 0) p.y = h;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+        });
+        requestAnimationFrame(animBg);
+      }
+      animBg();
+    });
+
+    /* 7. NEON CITY: INFINITE CYBERPUNK HIGHWAY RUNNER GAME */
+    let neonCanvas, neonCtx, neonAnimId;
+    let neonScore = 0, neonLives = 3, neonSpeedMult = 1.0;
+    let playerCar = { lane: 1, targetX: 0, currentX: 0, y: 0, w: 36, h: 60 };
+    let neonObstacles = [];
+    let neonBuildings = [];
+    let roadLinesY = 0;
+
+    function initNeonCityGame() {
+      neonCanvas = document.getElementById('neonCityGameCanvas');
+      neonCtx = neonCanvas.getContext('2d');
+      neonCanvas.width = neonCanvas.parentElement.clientWidth;
+      neonCanvas.height = neonCanvas.parentElement.clientHeight;
+
+      neonScore = 0;
+      neonLives = 3;
+      neonSpeedMult = 1.0;
+      neonObstacles = [];
+      neonBuildings = [];
+      
+      document.getElementById('neonScore').innerText = '0';
+      document.getElementById('neonSpeed').innerText = '1.0x';
+      document.getElementById('neonLives').innerText = '3';
+      document.getElementById('neonGameOver').classList.add('hidden');
+
+      playerCar.lane = 1;
+      playerCar.y = neonCanvas.height - 80;
+
+      for (let i = 0; i < 12; i++) {
+        neonBuildings.push({
+          side: i % 2 === 0 ? 'left' : 'right',
+          y: Math.random() * neonCanvas.height,
+          h: 40 + Math.random() * 80,
+          w: 30 + Math.random() * 30,
+          color: i % 3 === 0 ? '#ff0055' : (i % 3 === 1 ? '#00f3ff' : '#9d00ff')
+        });
+      }
+
+      document.getElementById('btnLeft').onclick = () => movePlayerCar(-1);
+      document.getElementById('btnRight').onclick = () => movePlayerCar(1);
+
+      window.onkeydown = (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a') movePlayerCar(-1);
+        if (e.key === 'ArrowRight' || e.key === 'd') movePlayerCar(1);
+      };
+
+      if (neonAnimId) cancelAnimationFrame(neonAnimId);
+      updateNeonCityGame();
+    }
+
+    function movePlayerCar(dir) {
+      playerCar.lane = Math.max(0, Math.min(2, playerCar.lane + dir));
+    }
+
+    function restartNeonCityGame() {
+      initNeonCityGame();
+    }
+
+    function updateNeonCityGame() {
+      neonCtx.clearRect(0, 0, neonCanvas.width, neonCanvas.height);
+
+      let roadW = neonCanvas.width * 0.7;
+      let roadLeft = (neonCanvas.width - roadW) / 2;
+      let laneW = roadW / 3;
+
+      neonCtx.fillStyle = '#050515';
+      neonCtx.fillRect(0, 0, neonCanvas.width, neonCanvas.height);
+
+      neonBuildings.forEach(b => {
+        b.y += (3 + neonSpeedMult) * 0.8;
+        if (b.y > neonCanvas.height) b.y = -b.h;
+
+        neonCtx.fillStyle = b.color;
+        neonCtx.globalAlpha = 0.3;
+        let bx = b.side === 'left' ? roadLeft - b.w - 10 : roadLeft + roadW + 10;
+        neonCtx.fillRect(bx, b.y, b.w, b.h);
+        neonCtx.globalAlpha = 1.0;
+      });
+
+      neonCtx.fillStyle = '#0d0f2b';
+      neonCtx.fillRect(roadLeft, 0, roadW, neonCanvas.height);
+      neonCtx.strokeStyle = '#00f3ff';
+      neonCtx.lineWidth = 3;
+      neonCtx.strokeRect(roadLeft, 0, roadW, neonCanvas.height);
+
+      roadLinesY += (5 * neonSpeedMult);
+      if (roadLinesY > 40) roadLinesY = 0;
+
+      neonCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      neonCtx.setLineDash([20, 20]);
+      neonCtx.lineDashOffset = -roadLinesY;
+      
+      neonCtx.beginPath();
+      neonCtx.moveTo(roadLeft + laneW, 0); neonCtx.lineTo(roadLeft + laneW, neonCanvas.height);
+      neonCtx.moveTo(roadLeft + laneW * 2, 0); neonCtx.lineTo(roadLeft + laneW * 2, neonCanvas.height);
+      neonCtx.stroke();
+      neonCtx.setLineDash([]);
+
+      playerCar.targetX = roadLeft + playerCar.lane * laneW + (laneW - playerCar.w) / 2;
+      playerCar.currentX += (playerCar.targetX - playerCar.currentX) * 0.3;
+
+      neonCtx.fillStyle = '#00f3ff';
+      neonCtx.shadowColor = '#00f3ff';
+      neonCtx.shadowBlur = 15;
+      neonCtx.fillRect(playerCar.currentX, playerCar.y, playerCar.w, playerCar.h);
+      neonCtx.fillStyle = '#ffffff';
+      neonCtx.fillRect(playerCar.currentX + 4, playerCar.y + 8, playerCar.w - 8, 12);
+      neonCtx.shadowBlur = 0;
+
+      if (Math.random() < 0.03 * neonSpeedMult) {
+        let lane = Math.floor(Math.random() * 3);
+        let colors = ['#ff0055', '#ffaa00', '#9d00ff'];
+        neonObstacles.push({
+          lane,
+          x: roadLeft + lane * laneW + (laneW - 32) / 2,
+          y: -70,
+          w: 32,
+          h: 55,
+          color: colors[Math.floor(Math.random() * colors.length)]
+        });
+      }
+
+      for (let i = neonObstacles.length - 1; i >= 0; i--) {
+        let obs = neonObstacles[i];
+        obs.y += (4 + neonSpeedMult * 2.5);
+
+        neonCtx.fillStyle = obs.color;
+        neonCtx.shadowColor = obs.color;
+        neonCtx.shadowBlur = 10;
+        neonCtx.fillRect(obs.x, obs.y, obs.w, obs.h);
+        neonCtx.shadowBlur = 0;
+
+        if (
+          playerCar.currentX < obs.x + obs.w &&
+          playerCar.currentX + playerCar.w > obs.x &&
+          playerCar.y < obs.y + obs.h &&
+          playerCar.y + playerCar.h > obs.y
+        ) {
+          playCyberBeat(7);
+          neonLives--;
+          document.getElementById('neonLives').innerText = neonLives;
+          neonObstacles.splice(i, 1);
+
+          if (neonLives <= 0) {
+            document.getElementById('neonFinalScore').innerText = Math.floor(neonScore);
+            document.getElementById('neonGameOver').classList.remove('hidden');
+            return;
+          }
+          continue;
+        }
+
+        if (obs.y > neonCanvas.height) {
+          neonObstacles.splice(i, 1);
+          neonScore += 10;
+          document.getElementById('neonScore').innerText = Math.floor(neonScore);
+        }
+      }
+
+      neonSpeedMult += 0.0005;
+      document.getElementById('neonSpeed').innerText = `${neonSpeedMult.toFixed(1)}x`;
+
+      neonAnimId = requestAnimationFrame(updateNeonCityGame);
+    }
+
+    /* 8. CYBER SPACE SHOOTER ENGINE */
+    let shooterCanvas, shooterCtx, shooterAnimId;
+    let shooterScore = 0, shooterShield = 100;
+    let shooterShip = { x: 0, y: 0, w: 30, h: 30, speed: 12 };
+    let shooterBullets = [];
+    let shooterEnemies = [];
+
+    function initShooterGame() {
+      shooterCanvas = document.getElementById('shooterCanvas');
+      shooterCtx = shooterCanvas.getContext('2d');
+      shooterCanvas.width = shooterCanvas.parentElement.clientWidth;
+      shooterCanvas.height = shooterCanvas.parentElement.clientHeight;
+
+      shooterScore = 0;
+      shooterShield = 100;
+      shooterBullets = [];
+      shooterEnemies = [];
+
+      document.getElementById('shooterScore').innerText = '0';
+      document.getElementById('shooterShield').innerText = '100%';
+      document.getElementById('shooterGameOver').classList.add('hidden');
+
+      shooterShip.x = shooterCanvas.width / 2 - 15;
+      shooterShip.y = shooterCanvas.height - 50;
+
+      document.getElementById('btnShooterLeft').onclick = () => { shooterShip.x = Math.max(10, shooterShip.x - 25); };
+      document.getElementById('btnShooterRight').onclick = () => { shooterShip.x = Math.min(shooterCanvas.width - 40, shooterShip.x + 25); };
+      document.getElementById('btnShooterFire').onclick = fireShooterLaser;
+
+      if (shooterAnimId) cancelAnimationFrame(shooterAnimId);
+      updateShooterGame();
+    }
+
+    function fireShooterLaser() {
+      playCyberBeat(2);
+      shooterBullets.push({ x: shooterShip.x + 12, y: shooterShip.y, w: 6, h: 14 });
+    }
+
+    function updateShooterGame() {
+      shooterCtx.fillStyle = '#02020a';
+      shooterCtx.fillRect(0, 0, shooterCanvas.width, shooterCanvas.height);
+
+      shooterCtx.fillStyle = '#00f3ff';
+      shooterCtx.beginPath();
+      shooterCtx.moveTo(shooterShip.x + 15, shooterShip.y);
+      shooterCtx.lineTo(shooterShip.x, shooterShip.y + 30);
+      shooterCtx.lineTo(shooterShip.x + 30, shooterShip.y + 30);
+      shooterCtx.closePath();
+      shooterCtx.fill();
+
+      for (let i = shooterBullets.length - 1; i >= 0; i--) {
+        let b = shooterBullets[i];
+        b.y -= 10;
+        shooterCtx.fillStyle = '#ffaa00';
+        shooterCtx.fillRect(b.x, b.y, b.w, b.h);
+        if (b.y < -10) shooterBullets.splice(i, 1);
+      }
+
+      if (Math.random() < 0.04) {
+        shooterEnemies.push({ x: Math.random() * (shooterCanvas.width - 30), y: -30, w: 25, h: 25, hp: 1 });
+      }
+
+      for (let i = shooterEnemies.length - 1; i >= 0; i--) {
+        let e = shooterEnemies[i];
+        e.y += 3;
+
+        shooterCtx.fillStyle = '#ff0055';
+        shooterCtx.fillRect(e.x, e.y, e.w, e.h);
+
+        for (let j = shooterBullets.length - 1; j >= 0; j--) {
+          let b = shooterBullets[j];
+          if (b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) {
+            playCyberBeat(7);
+            shooterEnemies.splice(i, 1);
+            shooterBullets.splice(j, 1);
+            shooterScore += 100;
+            document.getElementById('shooterScore').innerText = shooterScore;
+            break;
+          }
+        }
+
+        if (e && e.y > shooterCanvas.height) {
+          shooterEnemies.splice(i, 1);
+          shooterShield -= 20;
+          document.getElementById('shooterShield').innerText = `${Math.max(0, shooterShield)}%`;
+          if (shooterShield <= 0) {
+            document.getElementById('shooterGameOver').classList.remove('hidden');
+            return;
+          }
+        }
+      }
+
+      shooterAnimId = requestAnimationFrame(updateShooterGame);
+    }
+
+    /* 9. MEMORY MATRIX & BIRD SORT STUBS */
+    let matrixSequence = [], playerSequence = [], matrixStage = 1;
+
+    function initMatrixGridUI() {
+      const grid = document.getElementById('matrixGrid');
+      grid.innerHTML = '';
+      for (let i = 0; i < 9; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'h-16 bg-slate-800 rounded-xl border border-indigo-500/30 cursor-pointer flex items-center justify-center font-bold text-lg text-white font-orbitron active:scale-95 transition';
+        tile.dataset.id = i;
+        tile.onclick = () => handleMatrixClick(i);
+        grid.appendChild(tile);
+      }
+    }
+
+    function startMatrixGame() {
+      matrixStage = 1;
+      matrixSequence = [];
+      nextMatrixTurn();
+    }
+
+    function nextMatrixTurn() {
+      playerSequence = [];
+      document.getElementById('matrixStage').innerText = matrixStage;
+      document.getElementById('matrixStatus').innerText = 'MEMORIZE';
+      matrixSequence.push(Math.floor(Math.random() * 9));
+
+      matrixSequence.forEach((tileIdx, step) => {
+        setTimeout(() => {
+          flashMatrixTile(tileIdx);
+          playCyberBeat(4);
+        }, (step + 1) * 600);
+      });
+
+      setTimeout(() => {
+        document.getElementById('matrixStatus').innerText = 'YOUR TURN';
+      }, (matrixSequence.length + 1) * 600);
+    }
+
+    function flashMatrixTile(idx) {
+      const tiles = document.querySelectorAll('#matrixGrid div');
+      if (tiles[idx]) {
+        tiles[idx].classList.add('bg-indigo-500', 'shadow-lg', 'shadow-indigo-500/50');
+        setTimeout(() => {
+          tiles[idx].classList.remove('bg-indigo-500', 'shadow-lg', 'shadow-indigo-500/50');
+        }, 300);
+      }
+    }
+
+    function handleMatrixClick(idx) {
+      flashMatrixTile(idx);
+      playCyberBeat(8);
+      playerSequence.push(idx);
+
+      let currentStep = playerSequence.length - 1;
+      if (playerSequence[currentStep] !== matrixSequence[currentStep]) {
+        playCyberBeat(9);
+        document.getElementById('matrixStatus').innerText = 'FAILED!';
+        return;
+      }
+
+      if (playerSequence.length === matrixSequence.length) {
+        matrixStage++;
+        setTimeout(nextMatrixTurn, 800);
+      }
+    }
+
+    /* BIRD SORT */
+    let currentBirdLevel = 1;
+    function initBirdGame(lvl) {
+      currentBirdLevel = lvl;
+      document.getElementById('birdLevelTitle').innerText = `LEVEL ${lvl}`;
+      document.getElementById('birdWinModal').classList.add('hidden');
+      const grid = document.getElementById('birdSticksGrid');
+      grid.innerHTML = `
+        <div class="p-3 bg-slate-900 rounded-xl border border-sky-500/30 text-center text-xs font-mono text-cyan-300">Stick 1: 🦜 🦜 🕊️</div>
+        <div class="p-3 bg-slate-900 rounded-xl border border-sky-500/30 text-center text-xs font-mono text-cyan-300">Stick 2: 🕊️ 🕊️ 🦜</div>
+      `;
+    }
+    function nextBirdLevel() {
+      initBirdGame(currentBirdLevel + 1);
+    }
+
+    /* LAB-X & LIFE SIM & TERMINAL & HOLOGRAM */
+    let selectedChems = [];
+    function selectChem(name) {
+      if (selectedChems.length < 2) selectedChems.push(name);
+      document.getElementById('labSelectionText').innerText = `Selected: ${selectedChems.join(' + ')}`;
+    }
+    function mixChems() {
+      if (selectedChems.length === 2) {
+        document.getElementById('labBowlStatus').innerText = 'Crafted: Plasma 🔥';
+        playCyberBeat(1);
+        selectedChems = [];
+      }
+    }
+    function resetChem() {
+      selectedChems = [];
+      document.getElementById('labSelectionText').innerText = 'Selected: None';
+      document.getElementById('labBowlStatus').innerText = 'Select 2 Elements';
+    }
+
+    function lifeAction(act) {
+      const log = document.getElementById('lifeLog');
+      let msg = '';
+      if (act === 'work') msg = 'You worked shift (+ $50 cash)';
+      if (act === 'study') msg = 'You studied Python & Three.js (+5 Intellect)';
+      if (act === 'gym') msg = 'You worked out (+10 Strength)';
+      if (act === 'sleep') msg = 'Rested well (+100 Energy)';
+      
+      log.innerHTML += `<div>${msg}</div>`;
+      log.scrollTop = log.scrollHeight;
+      playCyberBeat(8);
+    }
+
+    function mCalc(v) {
+      const s = document.getElementById('mCalcScreen');
+      if (s.innerText === '0') s.innerText = v;
+      else s.innerText += v;
+    }
+    function mCalcEqual() {
+      const s = document.getElementById('mCalcScreen');
+      try { s.innerText = eval(s.innerText); } catch(e) { s.innerText = 'Error'; }
+    }
+
+    function handleTerminalCommand(e) {
+      if (e.key === 'Enter') {
+        const input = document.getElementById('terminalInput');
+        const logs = document.getElementById('terminalLogs');
+        const val = input.value.trim().toLowerCase();
+
+        logs.innerHTML += `<div class="text-white">$ ${input.value}</div>`;
+        if (val === 'help') logs.innerHTML += `<div class="text-cyan-300">Commands: sysinfo, clear, asteroids, karachi</div>`;
+        else if (val === 'sysinfo') logs.innerHTML += `<div>NEXUS OS 2.0 Web Kernel - Operational</div>`;
+        else if (val === 'asteroids') logs.innerHTML += `<div>Active NEO Tracking: ${asteroidObjects.length} targets</div>`;
+        else if (val === 'clear') logs.innerHTML = '';
+        else logs.innerHTML += `<div class="text-red-400">Unknown command: ${val}</div>`;
+
+        input.value = '';
+        logs.scrollTop = logs.scrollHeight;
+      }
+    }
+
+    /* HOLOGRAM */
+    let holoEngineScene, holoEngineCam, holoEngineRenderer, holoMesh;
+    function initHoloEngine() {
+      const canvas = document.getElementById('holoCanvas');
+      holoEngineScene = new THREE.Scene();
+      holoEngineCam = new THREE.PerspectiveCamera(45, canvas.parentElement.clientWidth / canvas.parentElement.clientHeight, 0.1, 100);
+      holoEngineCam.position.z = 4;
+
+      holoEngineRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      holoEngineRenderer.setSize(canvas.parentElement.clientWidth, canvas.parentElement.clientHeight);
+
+      const geom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+      const mat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true });
+      holoMesh = new THREE.Mesh(geom, mat);
+      holoEngineScene.add(holoMesh);
+
+      function animHolo() {
+        if (holoMesh) {
+          holoMesh.rotation.x += 0.01;
+          holoMesh.rotation.y += 0.01;
+        }
+        holoEngineRenderer.render(holoEngineScene, holoEngineCam);
+        requestAnimationFrame(animHolo);
+      }
+      animHolo();
+    }
+
+    function changeHoloShape(shape) {
+      if (!holoEngineScene || !holoMesh) return;
+      holoEngineScene.remove(holoMesh);
+      let geom;
+      if (shape === 'cube') geom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+      if (shape === 'torus') geom = new THREE.TorusGeometry(0.8, 0.3, 16, 100);
+      if (shape === 'sphere') geom = new THREE.SphereGeometry(1, 16, 16);
+      holoMesh = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true }));
+      holoEngineScene.add(holoMesh);
+    }
+  </script>
+</body>
+</html>
